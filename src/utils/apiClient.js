@@ -69,6 +69,10 @@ export const parkingApi = {
   // Locuri (Rezervare & Simulare)
   reserveParking: (locId, data) => apiClient.post(`/api/locuri/${locId}/rezervare`, data),
   simulateParking: (locId, data) => apiClient.put(`/api/locuri/${locId}/simulare`, data),
+
+  // Portofel
+  getBalance: (userId) => apiClient.get(`/api/user/${userId}/balanta`),
+  topUpWallet: (data) => apiClient.post('/api/user/wallet/topup', data),
   
   checkHealth: () => apiClient.healthCheck()
 };

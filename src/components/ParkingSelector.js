@@ -1,34 +1,13 @@
 // src/components/ParkingSelector.js
-import React, { useState, useEffect } from 'react';
-import { parkingApi } from '../utils/apiClient'; // Importăm clientul
+import React from 'react';
 import './ParkingSelector.css';
 
-const ParkingSelector = ({ onParkingSelect, selectedParkingId }) => {
-    const [parkings, setParkings] = useState([]);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState(null);
-
-    useEffect(() => {
-        const fetchParkings = async () => {
-            try {
-                // Folosim metoda din apiClient
-                const data = await parkingApi.getParcari();
-                setParkings(data);
-            } catch (error) {
-                console.error('Error fetching parkings:', error);
-                setError('Nu s-au putut încărca parcările.');
-            } finally {
-                setLoading(false);
-            }
-        };
-
-        fetchParkings();
-    }, []);
-
-    if (loading) return <div className="parking-selector-loading">Se încarcă lista de parcări...</div>;
+const ParkingSelector = ({ parkings, onParkingSelect, selectedParkingId }) => {
+    // Nu mai facem fetch aici, primim lista "parkings" din Dashboard
     
-    // Afișăm o eroare discretă dacă nu merge, dar nu blocăm tot UI-ul
-    if (error) return <div className="parking-selector-error" style={{padding:'1rem', textAlign:'center', color:'red'}}>{error}</div>;
+    if (!parkings || parkings.length === 0) {
+        return <div className="parking-selector-loading">Nu există parcări disponibile.</div>;
+    }
 
     return (
         <div className="parking-selector">
@@ -48,7 +27,7 @@ const ParkingSelector = ({ onParkingSelect, selectedParkingId }) => {
                             <p className="parking-address">📍 {parking.ADRESA}</p>
                             <div className="parking-info">
                                 <span className="capacity">Capacitate: {parking.CAPACITATETOTALA}</span>
-                                <span className="hours">⏰ {parking.ORAINCEPUT} - 22:00</span>
+                                <span className="hours">⏰ {parking.ORAINCEPUT} - {parking.ORASFARSIT || '22:00'}</span>
                             </div>
                         </div>
                         {selectedParkingId === parking.ID_PARCARE && (
