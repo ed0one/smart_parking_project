@@ -4,38 +4,36 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import LoadingSpinner from '../components/LoadingSpinner';
-import ReservationModal from '../components/ReservationModal';
-import ParkingSelector from '../components/ParkingSelector';
-import LocuriGrid from '../LocuriGrid';
 import { parkingApi } from '../utils/apiClient';
 import '../App.css';
+import LocuriGrid from '../LocuriGrid.js';
+import ParkingSelector from '../components/ParkingSelector';
+import ReservationModal from '../components/ReservationModal';
 
 function Dashboard() {
+
+    const [parcareData, setParcareData] = useState(null);
+    const [loading, setLoading] = useState(true);
+    const [vehicule, setVehicule] = useState([]);
+    const [numarNou, setNumarNou] = useState('');
+    const [marcaNoua, setMarcaNoua] = useState('');
+    const [modelNou, setModelNou] = useState('');
+    const [tarife, setTarife] = useState([]);
+    const [abonamente, setAbonamente] = useState([]);
+    const [selectedParkingId, setSelectedParkingId] = useState(1);
+    
+    // State pentru carusel
+    const [currentTarifIndex, setCurrentTarifIndex] = useState(0);
+
+    const [isReservationModalOpen, setIsReservationModalOpen] = useState(false);
+    const [selectedLocForReservation, setSelectedLocForReservation] = useState(null);
+
     const { user, logout } = useAuth();
     const { toast } = useToast();
     const navigate = useNavigate();
 
-    // State
-    const [parcareData, setParcareData] = useState(null);
-    const [loading, setLoading] = useState(true);
-    const [vehicule, setVehicule] = useState([]);
-    const [abonamente, setAbonamente] = useState([]);
-    const [tarife, setTarife] = useState([]);
-    const [selectedParkingId, setSelectedParkingId] = useState(1);
-    
-    // State pentru formulare
-    const [numarNou, setNumarNou] = useState('');
-    const [marcaNoua, setMarcaNoua] = useState('');
-    const [modelNou, setModelNou] = useState('');
-    
-    // State pentru Modal Rezervare
-    const [isReservationModalOpen, setIsReservationModalOpen] = useState(false);
-    const [selectedLocForReservation, setSelectedLocForReservation] = useState(null);
-
-    // Vehicul principal (primul din listă)
     const vehiculPrincipal = vehicule.length > 0 ? vehicule[0] : null;
 
-    // --- Data Fetching ---
     const fetchAllData = useCallback(async () => {
         if (!user) return;
         setLoading(true);
@@ -59,12 +57,22 @@ function Dashboard() {
         }
     }, [user, selectedParkingId, toast]);
 
-    // Initial Load
     useEffect(() => {
         fetchAllData();
     }, [fetchAllData]);
 
-    // --- Handlers ---
+    // Funcții carusel
+    const nextTarif = () => {
+        setCurrentTarifIndex((prevIndex) => 
+            prevIndex === tarife.length - 1 ? 0 : prevIndex + 1
+        );
+    };
+
+    const prevTarif = () => {
+        setCurrentTarifIndex((prevIndex) => 
+            prevIndex === 0 ? tarife.length - 1 : prevIndex - 1
+        );
+    };
 
     const handleRefresh = async () => {
         try {
@@ -86,15 +94,10 @@ function Dashboard() {
             toast.warning('Acest loc este în mentenanță.');
             return;
         }
-
         if (loc.STATUSCURENT === 'Ocupat') {
-            // Aici am putea adăuga logică pentru a elibera locul dacă e al userului curent
-            // Deocamdată doar informăm
             toast.info(`Locul ${loc.NUMARLOC} este deja ocupat.`);
             return;
         }
-
-        // Dacă e liber, deschidem modalul de rezervare
         if (loc.STATUSCURENT === 'Liber') {
             if (!vehiculPrincipal) {
                 toast.error('Trebuie să adaugi un vehicul înainte de a rezerva.');
@@ -108,7 +111,7 @@ function Dashboard() {
     const handleReservationComplete = () => {
         setIsReservationModalOpen(false);
         setSelectedLocForReservation(null);
-        handleRefresh(); // Reîmprospătăm grila
+        handleRefresh();
     };
 
     const handleAddVehicul = async (e) => {
@@ -122,7 +125,6 @@ function Dashboard() {
             });
             toast.success('Vehicul adăugat cu succes!');
             setNumarNou(''); setMarcaNoua(''); setModelNou('');
-            // Refresh doar la vehicule
             const v = await parkingApi.getUserVehicles(user.idUtilizator);
             setVehicule(v);
         } catch (error) {
@@ -154,7 +156,6 @@ function Dashboard() {
         navigate('/login');
     };
 
-    // --- Render Helpers ---
     const formatDate = (dateString) => {
         if (!dateString) return '-';
         return new Date(dateString).toLocaleDateString('ro-RO');
@@ -174,13 +175,11 @@ function Dashboard() {
             </header>
 
             <div className="container">
-                {/* Selector Parcare */}
                 <ParkingSelector 
                     selectedParkingId={selectedParkingId}
                     onParkingSelect={handleParkingSelect}
                 />
 
-                {/* Grid Parcare */}
                 <h2>Harta Locurilor</h2>
                 {loading ? (
                     <LoadingSpinner size="large" text="Se încarcă parcarea..." />
@@ -230,34 +229,68 @@ function Dashboard() {
                         </ul>
                     </div>
 
-                    {/* Secțiunea Abonamente */}
+                    {/* Secțiunea Abonamente (CARUSEL STILIZAT) */}
                     <div className="abonamente-container" style={{ flex: 1, minWidth: '300px', marginTop: 0 }}>
                         <h2>Abonamente</h2>
-                        <div className="tarife-lista" style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))'}}>
-                            {tarife.map(tarif => (
-                                <div key={tarif.ID_TARIF} className="tarif-card" style={{padding: '10px'}}>
-                                    <h4 style={{margin: '5px 0'}}>{tarif.DESCRIERE}</h4>
-                                    <p className="tarif-pret">{tarif.VALOARE} {tarif.MONEDA}</p>
-                                    <button onClick={() => handleBuyAbonament(tarif.ID_TARIF)} className="login-button buy-button" style={{fontSize: '0.8rem'}}>
-                                        Cumpara
+                        
+                        {tarife.length > 0 ? (
+                            <div className="carousel-container">
+                                {/* Buton Stânga cu Iconiță Chevron */}
+                                <button onClick={prevTarif} className="carousel-nav-button" title="Anterior">
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
+                                    </svg>
+                                </button>
+
+                                <div className="tarif-card-carousel">
+                                    <h3 style={{ margin: '0 0 10px 0', color: '#2c3e50' }}>{tarife[currentTarifIndex].DESCRIERE}</h3>
+                                    <p style={{ fontStyle: 'italic', color: '#7f8c8d' }}>Zona: {tarife[currentTarifIndex].NUMEZONA}</p>
+                                    
+                                    <div style={{ margin: '20px 0' }}>
+                                        <span className="tarif-pret" style={{ fontSize: '2rem', color: 'var(--color-primary)', fontWeight: 'bold' }}>
+                                            {tarife[currentTarifIndex].VALOARE} 
+                                        </span>
+                                        <span style={{ fontSize: '1.2rem', color: '#666', marginLeft: '5px' }}>
+                                            {tarife[currentTarifIndex].MONEDA}
+                                        </span>
+                                    </div>
+
+                                    <button 
+                                        onClick={() => handleBuyAbonament(tarife[currentTarifIndex].ID_TARIF)} 
+                                        className="login-button buy-button" 
+                                        style={{ width: '100%' }}
+                                    >
+                                        Cumpără Acum
                                     </button>
+                                    <span className="carousel-counter">
+                                        Oferta {currentTarifIndex + 1} din {tarife.length}
+                                    </span>
                                 </div>
-                            ))}
-                        </div>
+
+                                {/* Buton Dreapta cu Iconiță Chevron */}
+                                <button onClick={nextTarif} className="carousel-nav-button" title="Următor">
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+                                    </svg>
+                                </button>
+                            </div>
+                        ) : (
+                            <p>Nu există abonamente disponibile.</p>
+                        )}
+
                         <h4>Istoric Abonamente:</h4>
                         <ul className="vehicul-lista abonament-lista">
-                            {abonamente.map(ab => (
+                            {abonamente.length > 0 ? abonamente.map(ab => (
                                 <li key={ab.ID_ABONAMENT}>
                                     <strong>{ab.NUMEZONA}</strong>
                                     <span>Expira: {formatDate(ab.DATAEXPIRARE)}</span>
                                 </li>
-                            ))}
+                            )) : <p style={{fontStyle:'italic', color:'#666'}}>Niciun abonament activ.</p>}
                         </ul>
                     </div>
                 </div>
             </div>
 
-            {/* Modal Rezervare */}
             <ReservationModal 
                 isOpen={isReservationModalOpen}
                 onClose={() => setIsReservationModalOpen(false)}

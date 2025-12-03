@@ -528,3 +528,113 @@ li strong {
   font-weight: 600;
   text-shadow: 0 2px 4px rgba(0,0,0,0.1);
 }
+
+/* --- Stiluri pentru Carusel Abonamente --- */
+
+.carousel-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-lg);
+  margin-bottom: var(--spacing-xl);
+  padding: var(--spacing-md);
+  position: relative;
+}
+
+/* Butoanele de navigare (Săgețile) */
+.carousel-nav-button {
+  width: 45px;
+  height: 45px;
+  border-radius: 50%;
+  border: none;
+  /* Gradient identic cu restul aplicației */
+  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-hover) 100%);
+  color: var(--color-white);
+  font-size: 1.5rem;
+  font-weight: bold;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: var(--shadow-md);
+  transition: all var(--transition-normal);
+  z-index: 2;
+  outline: none;
+  /* Previne selecția textului */
+  user-select: none;
+}
+
+/* Efect Fancy la Hover */
+.carousel-nav-button:hover {
+  transform: translateY(-2px) scale(1.1);
+  box-shadow: var(--shadow-lg);
+  background: linear-gradient(135deg, var(--color-primary-hover) 0%, var(--color-primary) 100%);
+}
+
+/* Efect la Click */
+.carousel-nav-button:active {
+  transform: translateY(0) scale(0.95);
+  box-shadow: var(--shadow-sm);
+}
+
+/* Cardul central din carusel */
+.tarif-card-carousel {
+  flex: 1;
+  max-width: 350px;
+  background: var(--color-white);
+  padding: var(--spacing-xl);
+  border-radius: var(--radius-2xl);
+  /* Sticlă mată / efect modern */
+  box-shadow: var(--shadow-xl);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  text-align: center;
+  animation: fadeIn 0.4s ease-in-out;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Un mic accent decorativ pe fundalul cardului */
+.tarif-card-carousel::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 5px;
+  background: linear-gradient(90deg, var(--color-primary), var(--color-success));
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.carousel-counter {
+  display: block;
+  margin-top: var(--spacing-md);
+  font-size: 0.85em;
+  color: var(--color-gray-500);
+  font-weight: 500;
+  letter-spacing: 1px;
+}
+
+/* Asigură-te că iconița SVG este centrată și are mărimea potrivită */
+.carousel-nav-button svg {
+  width: 24px;
+  height: 24px;
+  stroke-width: 3;
+  /* Puțin mai groase pentru vizibilitate */
+  transition: transform 0.2s ease;
+}
+
+/* Efect extra: săgeata se mișcă puțin la hover pentru a invita la click */
+.carousel-nav-button:hover svg {
+  transform: scale(1.1);
+}
