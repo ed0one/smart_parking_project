@@ -1,6 +1,7 @@
 // src/components/ReservationModal.js
 import React, { useState } from 'react';
 import { useToast } from '../context/ToastContext';
+import { parkingApi } from '../utils/apiClient'; // Importăm clientul
 import './ReservationModal.css';
 
 const ReservationModal = ({ isOpen, onClose, onReserve, loc, vehiculPrincipal }) => {
@@ -10,7 +11,7 @@ const ReservationModal = ({ isOpen, onClose, onReserve, loc, vehiculPrincipal })
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
 
-  if (!isOpen) return null;
+  if (!isOpen || !loc) return null; // Verificăm și dacă avem un loc selectat
 
   const durations = [
     { value: 30, label: '30 minute', price: 2.5 },
@@ -31,29 +32,23 @@ const ReservationModal = ({ isOpen, onClose, onReserve, loc, vehiculPrincipal })
       const startTime = selectedTime === 'now' ? new Date() : new Date(customTime);
       const endTime = new Date(startTime.getTime() + selectedDuration * 60000);
 
-      const response = await fetch(`http://localhost:3000/api/locuri/${loc.ID_LOC}/rezervare`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
+      // Validare timp
+      if (isNaN(startTime.getTime())) {
+          throw new Error("Timp de start invalid.");
+      }
+
+      // Folosim apiClient
+      await parkingApi.reserveParking(loc.ID_LOC, {
           numarInmatriculare: vehiculPrincipal.NUMARINMATRICULARE,
           dataStart: startTime.toISOString(),
           dataEnd: endTime.toISOString(),
           durata: selectedDuration,
           pret: durations.find(d => d.value === selectedDuration)?.price || 5.0
-        })
       });
 
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Eroare la rezervare');
-      }
-
       toast.success(`Rezervare reușită pentru locul ${loc.NUMARLOC}!`);
-      onReserve();
-      onClose();
+      onReserve(); // Trigger refresh în Dashboard
+      onClose(); // Închide modalul
     } catch (error) {
       console.error('Eroare la rezervare:', error);
       toast.error(`Eroare: ${error.message}`);
@@ -132,6 +127,7 @@ const ReservationModal = ({ isOpen, onClose, onReserve, loc, vehiculPrincipal })
                   value={customTime}
                   onChange={(e) => setCustomTime(e.target.value)}
                   className="datetime-input"
+                  // Setăm minimul la ora curentă (aproximativ)
                   min={new Date().toISOString().slice(0, 16)}
                 />
               )}
@@ -155,7 +151,7 @@ const ReservationModal = ({ isOpen, onClose, onReserve, loc, vehiculPrincipal })
             <button 
               className="btn-reserve" 
               onClick={handleReservation}
-              disabled={isLoading || !vehiculPrincipal}
+              disabled={isLoading || !vehiculPrincipal || (selectedTime === 'custom' && !customTime)}
             >
               {isLoading ? 'Se rezervă...' : 'Rezervă Acum'}
             </button>

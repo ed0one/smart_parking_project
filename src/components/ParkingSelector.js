@@ -1,31 +1,34 @@
 // src/components/ParkingSelector.js
 import React, { useState, useEffect } from 'react';
+import { parkingApi } from '../utils/apiClient'; // Importăm clientul
 import './ParkingSelector.css';
 
 const ParkingSelector = ({ onParkingSelect, selectedParkingId }) => {
     const [parkings, setParkings] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
 
     useEffect(() => {
+        const fetchParkings = async () => {
+            try {
+                // Folosim metoda din apiClient
+                const data = await parkingApi.getParcari();
+                setParkings(data);
+            } catch (error) {
+                console.error('Error fetching parkings:', error);
+                setError('Nu s-au putut încărca parcările.');
+            } finally {
+                setLoading(false);
+            }
+        };
+
         fetchParkings();
     }, []);
 
-    const fetchParkings = async () => {
-        try {
-            const response = await fetch('http://localhost:3000/api/parcari');
-            const data = await response.json();
-            if (response.ok) {
-                setParkings(data);
-            } else {
-                console.error('Error fetching parkings:', data);
-            }
-        } catch (error) {
-            console.error('Error fetching parkings:', error);
-        }
-        setLoading(false);
-    };
-
-    if (loading) return <div className="parking-selector-loading">Se încarcă parcările...</div>;
+    if (loading) return <div className="parking-selector-loading">Se încarcă lista de parcări...</div>;
+    
+    // Afișăm o eroare discretă dacă nu merge, dar nu blocăm tot UI-ul
+    if (error) return <div className="parking-selector-error" style={{padding:'1rem', textAlign:'center', color:'red'}}>{error}</div>;
 
     return (
         <div className="parking-selector">
