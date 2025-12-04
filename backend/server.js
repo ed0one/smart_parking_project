@@ -590,6 +590,18 @@ app.post('/api/admin/mentenanta/:id/rezolva', async (req, res) => {
     }
 });
 
+// GET Istoric Modificari Tarife
+app.get('/api/admin/istoric-tarife', async (req, res) => {
+    try {
+        const result = await db.execute(
+            `SELECT * FROM ISTORIC_TARIFE ORDER BY DATA_MODIFICARII DESC`
+        );
+        res.json(result.rows);
+    } catch (err) {
+        res.json([]);
+    }
+});
+
 app.get('/api/health', (req, res) => {
     res.json({ status: 'OK' });
 });
