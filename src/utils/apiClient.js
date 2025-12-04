@@ -48,6 +48,19 @@ class ApiClient {
 
 const apiClient = new ApiClient();
 
+export const adminApi = {
+    getStats: () => apiClient.get('/api/admin/stats'),
+    getUsers: () => apiClient.get('/api/admin/users'),
+    deleteUser: (id) => apiClient.delete(`/api/admin/users/${id}`),
+    getTransactions: () => apiClient.get('/api/admin/plati'),
+    
+    // Metode Noi:
+    updateTarif: (id, valoare) => apiClient.put(`/api/admin/tarife/${id}`, { valoare }),
+    getReviews: () => apiClient.get('/api/admin/recenzii'),
+    getMaintenance: () => apiClient.get('/api/admin/mentenanta'),
+    resolveMaintenance: (id) => apiClient.post(`/api/admin/mentenanta/${id}/rezolva`, {})
+};
+
 export const parkingApi = {
   // Parcare & Zone
   getParcari: () => apiClient.get('/api/parcari'),
@@ -77,6 +90,8 @@ export const parkingApi = {
   getUserReservations: (userId) => apiClient.get(`/api/user/${userId}/rezervari`),
 
   finishReservation: (reservationId) => apiClient.post(`/api/rezervari/${reservationId}/finalizeaza`, {}),
+
+  
   
   checkHealth: () => apiClient.healthCheck()
 };

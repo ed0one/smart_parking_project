@@ -189,11 +189,15 @@ function Dashboard() {
                 <div className="header-container">
                     <h1>🅿️ Smart Parking</h1>
                     <div className="user-info">
-                        {/* NOU: Afișăm prenumele dacă există, altfel numele */}
-                        <span>Salut, {user?.prenume || user?.nume || 'Șofer'}!</span>
-                        <button onClick={() => navigate('/admin')} className="admin-button">Admin</button>
-                        <button onClick={handleLogout} className="logout-button">Logout</button>
-                    </div>
+    <span>Salut, {user?.prenume || user?.nume || 'Șofer'}!</span>
+    
+    {/* MODIFICARE AICI: Verificăm emailul specific */}
+    {user?.email === 'edi2004george@gmail.com' && (
+        <button onClick={() => navigate('/admin')} className="admin-button">Admin</button>
+    )}
+    
+    <button onClick={handleLogout} className="logout-button">Logout</button>
+</div>
                 </div>
             </header>
 

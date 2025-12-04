@@ -416,6 +416,180 @@ app.post('/api/user/abonamente', async (req, res) => {
     }
 });
 
+// --- 5. RUTE ADMIN (NOU) ---
+
+// Statistici Generale
+app.get('/api/admin/stats', async (req, res) => {
+    try {
+        const users = await db.execute(`SELECT COUNT(*) AS total FROM utilizatori`);
+        const revenue = await db.execute(`SELECT SUM(suma) AS total FROM plati WHERE status_plata = 'Reusit'`);
+        const activeSubs = await db.execute(`SELECT COUNT(*) AS total FROM abonamente WHERE status = 'Activ'`);
+        const parkedCars = await db.execute(`SELECT COUNT(*) AS total FROM locuri WHERE statuscurent = 'Ocupat'`);
+
+        res.json({
+            totalUsers: users.rows[0].TOTAL,
+            totalRevenue: revenue.rows[0].TOTAL || 0,
+            activeSubscriptions: activeSubs.rows[0].TOTAL,
+            currentOccupancy: parkedCars.rows[0].TOTAL
+        });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Lista Utilizatori
+app.get('/api/admin/users', async (req, res) => {
+    try {
+        const result = await db.execute(
+            `SELECT id_utilizator, nume, prenume, email, rol, balanta, TO_CHAR(data_inregistrare, 'DD-MM-YYYY') as data_reg 
+             FROM utilizatori ORDER BY id_utilizator DESC`
+        );
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Sterge Utilizator (Admin)
+app.delete('/api/admin/users/:id', async (req, res) => {
+    const userId = req.params.id;
+    try {
+        // Stergem tot ce tine de user pentru a pastra consistenta (sau folosim CASCADE in DB)
+        // Aici facem cleanup manual pentru siguranta
+        await db.execute(`DELETE FROM rezervari WHERE id_utilizator = :id`, { id: userId });
+        await db.execute(`DELETE FROM abonamente WHERE id_utilizator = :id`, { id: userId });
+        await db.execute(`DELETE FROM plati WHERE id_utilizator = :id`, { id: userId });
+        await db.execute(`DELETE FROM vehicule WHERE id_utilizator = :id`, { id: userId });
+        await db.execute(`DELETE FROM utilizatori WHERE id_utilizator = :id`, { id: userId });
+        
+        res.json({ message: 'Utilizator șters cu succes.' });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Istoric Plati (Toate)
+app.get('/api/admin/plati', async (req, res) => {
+    try {
+        // Luam ultimele 50 de plati
+        const result = await db.execute(
+            `SELECT p.*, u.nume, u.prenume, TO_CHAR(p.data_plata, 'DD-MM-YYYY HH24:MI') as data_fmt 
+             FROM plati p
+             JOIN utilizatori u ON p.id_utilizator = u.id_utilizator
+             ORDER BY p.data_plata DESC FETCH FIRST 50 ROWS ONLY`
+        );
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Management Locuri (Schimba status Mentenanta/Liber)
+app.post('/api/admin/locuri/:id/toggle', async (req, res) => {
+    const idLoc = req.params.id;
+    try {
+        const loc = await db.execute(`SELECT statuscurent FROM locuri WHERE id_loc = :id`, { id: idLoc });
+        if (loc.rows.length === 0) return res.status(404).json({ error: 'Loc inexistent' });
+
+        const currentStatus = loc.rows[0].STATUSCURENT;
+        let newStatus = currentStatus === 'Mentenanta' ? 'Liber' : 'Mentenanta';
+        
+        // Daca e ocupat, nu il punem in mentenanta direct (optional)
+        if (currentStatus === 'Ocupat' || currentStatus === 'Rezervat') {
+             return res.status(400).json({ error: 'Nu poți pune în mentenanță un loc ocupat.' });
+        }
+
+        await db.execute(`UPDATE locuri SET statuscurent = :status WHERE id_loc = :id`, { status: newStatus, id: idLoc });
+        res.json({ message: `Locul este acum: ${newStatus}`, newStatus });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// 1. TARIFE (GET & UPDATE)
+// GET e deja definit la public, dar facem unul de admin daca vrem detalii extra, 
+// momentan folosim cel public pentru lista, dar avem nevoie de UPDATE.
+app.put('/api/admin/tarife/:id', async (req, res) => {
+    const idTarif = req.params.id;
+    const { valoare } = req.body;
+    
+    if (!valoare || valoare <= 0) return res.status(400).json({ error: 'Valoare invalidă' });
+
+    try {
+        await db.execute(
+            `UPDATE tarife SET valoare = :val WHERE id_tarif = :id`, 
+            { val: valoare, id: idTarif }
+        );
+        res.json({ message: 'Tarif actualizat cu succes!' });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// 2. RECENZII (GET)
+app.get('/api/admin/recenzii', async (req, res) => {
+    try {
+        // Dacă nu ai tabela RECENZII creată, va da eroare, dar presupunem că ai rulat scriptul complet
+        // Facem JOIN ca să vedem cine a scris și despre ce parcare
+        const result = await db.execute(
+            `SELECT r.*, u.nume, u.prenume, p.numeparcare, TO_CHAR(r.data_recenzie, 'DD-MM-YYYY') as data_fmt
+             FROM recenzii r
+             JOIN utilizatori u ON r.id_utilizator = u.id_utilizator
+             JOIN parcari p ON r.id_parcare = p.id_parcare
+             ORDER BY r.data_recenzie DESC`
+        );
+        res.json(result.rows);
+    } catch (err) {
+        // Returnam array gol daca nu exista tabela sau date, ca sa nu crape frontend-ul
+        res.json([]); 
+    }
+});
+
+// 3. MENTENANTA (GET & RESOLVE)
+app.get('/api/admin/mentenanta', async (req, res) => {
+    try {
+        const result = await db.execute(
+            `SELECT m.*, l.numarloc, p.numeparcare, TO_CHAR(m.data_raportarii, 'DD-MM-YYYY') as data_fmt
+             FROM mentenanta m
+             JOIN locuri l ON m.id_loc = l.id_loc
+             JOIN zone z ON l.id_zona = z.id_zona
+             JOIN parcari p ON z.id_parcare = p.id_parcare
+             ORDER BY m.status ASC, m.data_raportarii DESC`
+        );
+        res.json(result.rows);
+    } catch (err) {
+        res.json([]);
+    }
+});
+
+app.post('/api/admin/mentenanta/:id/rezolva', async (req, res) => {
+    const idMentenanta = req.params.id;
+    try {
+        // 1. Luam ID-ul locului
+        const tichet = await db.execute(`SELECT id_loc FROM mentenanta WHERE id_mentenanta = :id`, {id: idMentenanta});
+        if (tichet.rows.length === 0) return res.status(404).json({error: 'Tichet inexistent'});
+        
+        const idLoc = tichet.rows[0].ID_LOC;
+
+        // 2. Actualizam tichetul ca Rezolvat
+        await db.execute(
+            `UPDATE mentenanta SET status = 'Rezolvat', data_rezolvarii = SYSDATE WHERE id_mentenanta = :id`,
+            { id: idMentenanta }
+        );
+
+        // 3. Punem locul inapoi pe LIBER
+        await db.execute(
+            `UPDATE locuri SET statuscurent = 'Liber' WHERE id_loc = :id`,
+            { id: idLoc }
+        );
+
+        res.json({ message: 'Problemă rezolvată! Locul este din nou liber.' });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 app.get('/api/health', (req, res) => {
     res.json({ status: 'OK' });
 });
