@@ -9,53 +9,58 @@ import '../App.css';
 import LocuriGrid from '../LocuriGrid.js';
 import ParkingSelector from '../components/ParkingSelector';
 import ReservationModal from '../components/ReservationModal';
-import WalletCard from '../components/WalletCard'; // Asigură-te că ai creat fișierul anterior
+import WalletCard from '../components/WalletCard';
 
 function Dashboard() {
     const { user, logout } = useAuth();
     const { toast } = useToast();
     const navigate = useNavigate();
 
-    // --- STATE ---
-    // Lista tuturor parcărilor disponibile
     const [parkingsList, setParkingsList] = useState([]);
-    
-    // ID-ul parcării selectate (începe ca null)
     const [selectedParkingId, setSelectedParkingId] = useState(null);
-    
     const [parcareData, setParcareData] = useState(null);
     const [loading, setLoading] = useState(true);
     
-    // Date utilizator
     const [vehicule, setVehicule] = useState([]);
     const [abonamente, setAbonamente] = useState([]);
+    
+    // NOU: State pentru rezervări
+    const [rezervari, setRezervari] = useState([]);
+
     const [tarife, setTarife] = useState([]);
     const [balance, setBalance] = useState(0);
 
-    // Formulare vehicul
     const [numarNou, setNumarNou] = useState('');
     const [marcaNoua, setMarcaNoua] = useState('');
     const [modelNou, setModelNou] = useState('');
     
-    // Carusel & Modal
     const [currentTarifIndex, setCurrentTarifIndex] = useState(0);
     const [isReservationModalOpen, setIsReservationModalOpen] = useState(false);
     const [selectedLocForReservation, setSelectedLocForReservation] = useState(null);
 
     const vehiculPrincipal = vehicule.length > 0 ? vehicule[0] : null;
 
-    // --- 1. INITIALIZARE: Încărcăm lista de parcări ---
+    const handleFinishReservation = async (idRezervare) => {
+    if (!window.confirm("Ești sigur că vrei să eliberezi locul?")) return;
+
+    try {
+        await parkingApi.finishReservation(idRezervare);
+        toast.success("Loc eliberat! Sperăm că ți-a plăcut parcarea.");
+        handleRefresh(); // Actualizează harta și lista
+    } catch (error) {
+        toast.error(error.message);
+    }
+};
+
     useEffect(() => {
         const initApp = async () => {
             try {
                 const lista = await parkingApi.getParcari();
                 setParkingsList(lista);
-                
                 if (lista && lista.length > 0) {
-                    // Selectăm automat prima parcare din listă
                     setSelectedParkingId(lista[0].ID_PARCARE);
                 } else {
-                    setLoading(false); // Oprim loading-ul chiar dacă nu avem date
+                    setLoading(false);
                     toast.warning('Nu s-au găsit parcări în sistem.');
                 }
             } catch (error) {
@@ -65,19 +70,18 @@ function Dashboard() {
             }
         };
         if (user) initApp();
-    }, [user]); // Se execută doar la logare
+    }, [user]);
 
-    // --- 2. FETCH DATA: Se execută când avem un ID de parcare selectat ---
     const fetchAllData = useCallback(async () => {
         if (!user || !selectedParkingId) return;
-        
         setLoading(true);
         try {
-            // Încărcăm totul în paralel
-            const [dataParcare, dataVehicule, dataAbonamente, dataTarife, dataBalanta] = await Promise.all([
+            // NOU: Fetch rezervări
+            const [dataParcare, dataVehicule, dataAbonamente, dataRezervari, dataTarife, dataBalanta] = await Promise.all([
                 parkingApi.getParcareCompleta(selectedParkingId),
                 parkingApi.getUserVehicles(user.idUtilizator),
                 parkingApi.getUserSubscriptions(user.idUtilizator),
+                parkingApi.getUserReservations(user.idUtilizator), // <-- AICI
                 parkingApi.getTariffs(),
                 parkingApi.getBalance(user.idUtilizator)
             ]);
@@ -85,12 +89,11 @@ function Dashboard() {
             setParcareData(dataParcare);
             setVehicule(dataVehicule);
             setAbonamente(dataAbonamente);
+            setRezervari(dataRezervari); // <-- SETAM REZERVARILE
             setTarife(dataTarife);
             setBalance(dataBalanta.balanta);
-            
         } catch (error) {
             console.error(error);
-            // Nu afișăm toast aici pentru a nu spama la fiecare refresh, doar logăm
         } finally {
             setLoading(false);
         }
@@ -99,8 +102,6 @@ function Dashboard() {
     useEffect(() => {
         fetchAllData();
     }, [fetchAllData]);
-
-    // --- HANDLERS ---
 
     const refreshBalance = async () => {
         try {
@@ -119,7 +120,6 @@ function Dashboard() {
         toast.success('Date actualizate!');
     };
 
-    // Logica Carusel
     const nextTarif = () => setCurrentTarifIndex(prev => prev === tarife.length - 1 ? 0 : prev + 1);
     const prevTarif = () => setCurrentTarifIndex(prev => prev === 0 ? tarife.length - 1 : prev - 1);
 
@@ -136,8 +136,8 @@ function Dashboard() {
     const handleReservationComplete = () => {
         setIsReservationModalOpen(false);
         setSelectedLocForReservation(null);
-        handleRefresh(); // Refresh grid
-        refreshBalance(); // Refresh bani (că a costat)
+        handleRefresh(); 
+        refreshBalance(); 
     };
 
     const handleAddVehicul = async (e) => {
@@ -151,7 +151,6 @@ function Dashboard() {
             });
             toast.success('Vehicul adăugat!');
             setNumarNou(''); setMarcaNoua(''); setModelNou('');
-            // Refresh parțial
             const v = await parkingApi.getUserVehicles(user.idUtilizator);
             setVehicule(v);
         } catch (error) {
@@ -182,6 +181,7 @@ function Dashboard() {
     };
 
     const formatDate = (d) => d ? new Date(d).toLocaleDateString('ro-RO') : '-';
+    const formatTime = (d) => d ? new Date(d).toLocaleTimeString('ro-RO', {hour: '2-digit', minute:'2-digit'}) : '-';
 
     return (
         <div className="App">
@@ -189,7 +189,8 @@ function Dashboard() {
                 <div className="header-container">
                     <h1>🅿️ Smart Parking</h1>
                     <div className="user-info">
-                        <span>Salut, {user?.NUME}!</span>
+                        {/* NOU: Afișăm prenumele dacă există, altfel numele */}
+                        <span>Salut, {user?.prenume || user?.nume || 'Șofer'}!</span>
                         <button onClick={() => navigate('/admin')} className="admin-button">Admin</button>
                         <button onClick={handleLogout} className="logout-button">Logout</button>
                     </div>
@@ -197,14 +198,12 @@ function Dashboard() {
             </header>
 
             <div className="container">
-                {/* 1. SELECTOR PARCARE (Primeste lista ca prop) */}
                 <ParkingSelector 
                     parkings={parkingsList}
                     selectedParkingId={selectedParkingId}
                     onParkingSelect={handleParkingSelect}
                 />
 
-                {/* 2. HARTA LOCURI */}
                 <div className="section-header" style={{marginTop: '2rem', display:'flex', justifyContent:'space-between', alignItems:'center'}}>
                     <h2>Harta Locurilor</h2>
                     <button onClick={handleRefresh} className="btn-small btn-small--edit">↻ Actualizează</button>
@@ -226,15 +225,55 @@ function Dashboard() {
 
                 <div className="split-view" style={{ display: 'flex', flexWrap: 'wrap', gap: '2rem', marginTop: '2rem' }}>
                     
-                    {/* 3. PORTOFEL & VEHICULE */}
                     <div className="vehicule-container" style={{ flex: 1, minWidth: '300px', marginTop: 0 }}>
-                        
-                        {/* Card Portofel */}
                         <WalletCard 
                             userId={user.idUtilizator}
                             balance={balance}
                             onBalanceChange={refreshBalance}
                         />
+
+                        {/* NOU: Secțiunea Rezervări */}
+                        <div style={{ marginTop: '20px', marginBottom: '30px' }}>
+                            <h2 style={{ borderBottom: '2px solid #f39c12', color: '#e67e22' }}>Rezervările Mele</h2>
+                            {rezervari.length === 0 ? (
+                                <p style={{ fontStyle: 'italic', color: '#666' }}>Nu ai rezervări active.</p>
+                            ) : (
+                                <ul className="vehicul-lista" style={{ maxHeight: '200px', overflowY: 'auto' }}>
+    {rezervari.map(rez => (
+        <li key={rez.ID_REZERVARE} style={{ borderLeftColor: rez.STATUS === 'Confirmata' ? '#27ae60' : '#bdc3c7', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+            <div>
+                <strong>{rez.NUMEPARCARE} - Loc {rez.NUMARLOC}</strong>
+                <span style={{ fontSize: '0.8rem', display:'block', marginTop:'4px' }}>
+                    {formatTime(rez.DATA_INCEPUT)} - {formatTime(rez.DATA_SFARSIT)}
+                </span>
+                <span style={{ fontSize: '0.75rem', fontWeight:'bold', color: rez.STATUS === 'Confirmata' ? '#27ae60' : '#7f8c8d' }}>
+                    {rez.STATUS.toUpperCase()}
+                </span>
+            </div>
+            
+            {/* Butonul apare doar dacă rezervarea este activă */}
+            {rez.STATUS === 'Confirmata' && (
+                <button 
+                    onClick={() => handleFinishReservation(rez.ID_REZERVARE)}
+                    style={{
+                        padding: '5px 10px',
+                        fontSize: '0.7rem',
+                        background: '#e74c3c',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '4px',
+                        cursor: 'pointer',
+                        marginLeft: '10px'
+                    }}
+                >
+                    Eliberează
+                </button>
+            )}
+        </li>
+    ))}
+</ul>
+                            )}
+                        </div>
 
                         <h2>Vehiculele Mele</h2>
                         <form onSubmit={handleAddVehicul} className="vehicul-form">
@@ -254,21 +293,20 @@ function Dashboard() {
                             {vehicule.map(v => (
                                 <li key={v.ID_VEHICUL}>
                                     <strong>{v.NUMARINMATRICULARE}</strong>
-                                    <span>{v.MARCA} {v.MODEL}</span>
+                                    <span>{v.MARCA}</span>
                                 </li>
                             ))}
                             {vehicule.length === 0 && <p style={{fontStyle:'italic', color:'#666'}}>Niciun vehicul.</p>}
                         </ul>
                     </div>
 
-                    {/* 4. ABONAMENTE (CARUSEL) */}
                     <div className="abonamente-container" style={{ flex: 1, minWidth: '300px', marginTop: 0 }}>
                         <h2>Abonamente</h2>
                         
                         {tarife.length > 0 ? (
                             <div className="carousel-container">
                                 <button onClick={prevTarif} className="carousel-nav-button">
-                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" /></svg>
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" width="24" height="24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.75 19.5L8.25 12l7.5-7.5" /></svg>
                                 </button>
 
                                 <div className="tarif-card-carousel">
@@ -283,7 +321,7 @@ function Dashboard() {
                                 </div>
 
                                 <button onClick={nextTarif} className="carousel-nav-button">
-                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" /></svg>
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" width="24" height="24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.25 4.5l7.5 7.5-7.5 7.5" /></svg>
                                 </button>
                             </div>
                         ) : <p>Nu există abonamente.</p>}

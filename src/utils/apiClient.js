@@ -73,6 +73,10 @@ export const parkingApi = {
   // Portofel
   getBalance: (userId) => apiClient.get(`/api/user/${userId}/balanta`),
   topUpWallet: (data) => apiClient.post('/api/user/wallet/topup', data),
+
+  getUserReservations: (userId) => apiClient.get(`/api/user/${userId}/rezervari`),
+
+  finishReservation: (reservationId) => apiClient.post(`/api/rezervari/${reservationId}/finalizeaza`, {}),
   
   checkHealth: () => apiClient.healthCheck()
 };
